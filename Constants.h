@@ -16,18 +16,42 @@ typedef uint32_t uint32;
 typedef uint16_t uint16;
 typedef uint8_t uint8;
 
+#pragma pack(push, 1)
 
+
+struct CGGuid
+{
+    uint64_t high;
+    uint64_t low;
+
+    bool isEmpty() { return high == 0 && low == 0; }
+
+    bool operator!=(const CGGuid& rhs) const {
+        return (this->high != rhs.high && this->low != rhs.low);
+    }
+    bool operator==(const CGGuid& rhs) const {
+        return (this->high == rhs.high && this->low == rhs.low);
+    }
+
+    std::string toString() const { return std::string("Guid (" + std::to_string(high) + " " + std::to_string(low) + ")"); }
+};
+#pragma pack(pop)
+
+enum AuraFlags : BYTE {
+    Active = 0x80,
+    Passive = 0x10, 
+    Harmful = 0x20
+};
 
 enum CGGameUI_isinworldID : uint8_t
 {
-   NotInitialized = 0x0000000,
-   LoadingScreen1 = 0x1000003,
-   LoadingScreen2 = 0x1000002,
-   Loaded = 0x1010004
+    NotInitialized = 0x0000000,
+    LoadingScreen1 = 0x1000003,
+    LoadingScreen2 = 0x1000002,
+    Loaded = 0x1010004
 };
 
-
-enum class TypeId : uint8_t
+enum class TypeIdTBC : uint8_t
 {
     CGObject = 0,
     CGItem = 1,
@@ -41,10 +65,111 @@ enum class TypeId : uint8_t
     CGAreaTrigger = 9,
     CGSceneObject = 10,
     CGConversation = 11,
-	AIGroup = 12,
+    AIGroup = 12,
     Scenario = 13,
     Loot = 14,
-    Invalid = 15// 17
+    Invalid = 15
+};
+
+//Wrath
+enum class TypeId : uint8_t
+{
+	CGObject = 0,
+	CGItem = 1,
+	CGContainer = 2,
+	CGAzeriteEmpoweredItem_C,
+	CGAzeriteItem_C,
+	CGUnit = 5,
+	CGPlayer = 6,
+	CGActivePlayer = 7,
+	CGGameObject = 8,
+	CGDynamicObject = 9,
+	CGCorpse = 10,
+	CGAreaTrigger = 11,
+	CGSceneObject = 12,
+	CGConversation = 13,
+	//AIGroup = 14,
+	//Scenario = 15,
+	//Loot = 16,
+	Invalid = 17
+};
+
+enum class WoWObjTypeId : uint8_t
+{
+	Door = 0,
+	Button = 1,
+	Questgiver = 2,
+	ChestHerbsMinerals = 3,// # Herbs, Minerals, Chests
+	Binder = 4,
+	Generic = 5,
+	Trap = 6,
+	Chair = 7,
+	SpellFocus = 8,
+	Text = 9,
+	Goober = 10,
+	TransportElevator = 11,
+	AreaDamage = 12,
+	Camera = 13,
+	Mapobject = 14,
+	MoTransportShip = 15,
+	DuelFlag = 16,
+	FishingNode = 17,
+	Ritual = 18,
+	Mailbox = 19,
+	DONOTUSE1 = 20,
+	GuardPost = 21,
+	SpellCaster = 22,
+	MeetingStone = 23,
+	FlagStand = 24,
+	FishingHole = 25,
+	FlagDrop = 26,
+	DONOTUSE2 = 27,
+	DONOTUSE3 = 28,
+	ControlZone = 29,
+	AuraGenerator = 30,
+	DungeonDifficulty = 31,
+	BarberChair = 32,
+	DestructibleBuilding = 33,
+	GuildBank = 34,
+	Trapdoor = 35,
+	Newflag = 36,
+	Newflagdrop = 37,
+	GarrisonBuilding = 38,
+	GarrisonPlot = 39,
+	ClientCreature = 40,
+	ClientItem = 41,
+	CapturePoint = 42,
+	PhaseableMO = 43,
+	GarrisonMonument = 44,
+	GarrisonShipment = 45,
+	GarrisonMonumentPlaque = 46,
+	NUM_GAMEOBJECT_TYPE = 47
+};
+
+
+enum class PowerTypeId : uint8_t
+{
+	mana = 0,
+	rage = 1,
+	focus = 2,
+	energy = 3,
+	happiness = 4,
+	runes = 5,
+	runicpower = 6,
+	SoulShards,
+	HolyPower,
+	Maelstrom,
+	Chi,
+	Insanity,
+	ComboPoints,
+	Obsolete2,
+	ArcaneCharges,
+	Fury,
+	Pain,
+	Essence,
+	RuneBlood,
+	RuneFrost,
+	RuneUnholy
 };
 
 enum WoWClass : uint8_t
@@ -84,7 +209,37 @@ enum WoWRace : uint8_t
     BloodElfs = 1610,
 };
 
-enum class SPELL_FAILED_REASON : uint8_t
+enum class IntersectFlags {
+    None,
+    DoodadCollision = 0x00000001,
+    DoodadRender = 0x00000002,
+    WmoCollision = 0x00000010,
+    WmoRender = 0x00000020,
+    WmoNoCamCollision = 0x00000040,
+    Terrain = 0x00000100,
+    IgnoreWmoDoodad = 0x00002000,
+    LiquidWaterWalkable = 0x00010000,
+    LiquidAll = 0x00020000,
+    Cull = 0x00080000,
+    EntityCollision = 0x00100000,
+    EntityRender = 0x00200000,
+    Collision = DoodadCollision | WmoCollision | Terrain | EntityCollision,
+    LineOfSight = WmoCollision | EntityCollision | DoodadCollision
+};
+
+enum UnitDynFlags {
+    UNIT_DYNFLAG_NONE = 0x0000,
+    UNIT_DYNFLAG_HIDE_MODEL = 0x0001, // Object model is not shown with this flag
+    UNIT_DYNFLAG_LOOTABLE = 0x0004,
+    UNIT_DYNFLAG_TRACK_UNIT = 0x0008,
+    UNIT_DYNFLAG_TAPPED = 0x0010, // Lua_UnitIsTapped - Indicates the target as grey for the client.
+	UNIT_DYNFLAG_TAPPEDBYME = 0x0020, // 
+    UNIT_DYNFLAG_DEAD = 0x0040,
+    UNIT_DYNFLAG_REFER_A_FRIEND = 0x0080,
+	UNIT_DYNFLAG_ISTAPPEDBYALL_THREATLIST = 0x100
+};
+
+enum SPELL_FAILED_REASON : BYTE
 {
 	Success = 0,
 	AffectingCombat = 1,
@@ -273,16 +428,20 @@ enum class SPELL_FAILED_REASON : uint8_t
 	MaxSockets = 184,
 	PetCanRename = 185,
 	TargetCannotBeResurrected = 186,
-	Unknown = 187,
+	Unknownn = 187,
 	Ok = 0xFF
 };
-
-struct WGuid
-{
-    uint64_t High;
-    uint64_t Low;
-
-    bool operator==(const WGuid& rhs) const {
-        return (High == rhs.High && Low == rhs.Low);
-    }
+enum class ControlBits {
+	Nothing = 0x00000000,
+	CtmWalk = 0x00001000,
+	Front = 0x00000010,
+	Back = 0x00000020,
+	Jump = 0x00002000,
+	Left = 0x00000100,
+	Right = 0x00000200,
+	MovingFrontOrBack = 0x00010000,
+	StrafeLeft = 0x00000040,
+	StrafeRight = 0x00000080,
+	Strafing = 0x00020000,
+	Turning = 0x00040000
 };

@@ -1,9 +1,7 @@
 #include "Radar.h"
 
-
-namespace Radar {
-
-	Vector2D WorldToRadar(const C3Vector location, const C3Vector origin, float Player_rotation, int width, float scale = 16.f)
+namespace Draw {
+	Vector2D WorldToRadar(const Vector3 location, const Vector3 origin, float Player_rotation, int width, float scale = 16.f)
 	{
 		float x_diff = location.x - origin.x;
 		float y_diff = location.y - origin.y;
@@ -53,32 +51,91 @@ namespace Radar {
 		return Vector2D(xnew_diff, ynew_diff);
 	}
 
-	static void SquareConstraint(ImGuiSizeCallbackData* data)
+	void SquareConstraint(ImGuiSizeCallbackData* data)
 	{
 		data->DesiredSize = ImVec2(max(data->DesiredSize.x, data->DesiredSize.y), max(data->DesiredSize.x, data->DesiredSize.y));
 	}
 
 	float Radar::RadianToDegree(float Rotation)
 	{
-		return (float)(Rotation * (180 / PI));
+		return (float)(Rotation * (180 / M_PI));
 	}
 
+	void Radar::DrawObj(WObject* localplayer, WObject* entity, ImColor color, ImDrawList* draw_list, ImVec2 winpos, ImVec2 winsize) {
+		int shape = -1;
+
+		Vector3 localPos = localplayer->GetUnitPosition();
+		Vector3 playerPos = entity->GetUnitPosition();
+		Vector3 forward = entity->direction();
+
+		float Player_rotation = RadianToDegree(localplayer->GetFacing());
+		Vector2D screenpos = WorldToRadar(entity->GetUnitPosition(), localplayer->GetUnitPosition(), Player_rotation, winsize.x, Settings::Drawing::Radar::zoom);
+
+		if (playerPos.z + 64.0f < localPos.z)
+			shape = EntityShape_t::SHAPE_TRIANGLE_UPSIDEDOWN;
+		else if (playerPos.z - 64.0f > localPos.z)
+			shape = EntityShape_t::SHAPE_TRIANGLE;
+		else
+			shape = EntityShape_t::SHAPE_CIRCLE;
+
+		float scale = Settings::Drawing::Radar::iconsScale;
+		Vector3 dirArrowVec = playerPos + (forward * 2 * Settings::Drawing::Radar::zoom * scale);
+		Vector2D dirArrowPos = WorldToRadar(dirArrowVec, localplayer->GetUnitPosition(), Player_rotation, winsize.x, Settings::Drawing::Radar::zoom);
+		Vector2D line = dirArrowPos - screenpos;
+
+		float arrowWidth = scale;
+		float arrowTheta = 45.f;
+		float length = sqrtf(powf(line.x, 2.f) + powf(line.y, 2.f));
+
+		Vector2D arrowBase = dirArrowPos - (arrowWidth / (2 * (tanf(arrowTheta) / 2) * length)) * line;
+		Vector2D normal = Vector2D(-line.y, line.x);
+		Vector2D left = arrowBase + arrowWidth / (2 * length) * normal;
+		Vector2D right = arrowBase + -arrowWidth / (2 * length) * normal;
+
+		draw_list->AddTriangleFilled(ImVec2(winpos.x + left.x, winpos.y + left.y),
+			ImVec2(winpos.x + right.x, winpos.y + right.y),
+			ImVec2(winpos.x + dirArrowPos.x, winpos.y + dirArrowPos.y),
+			ImColor(230, 230, 230));
+
+		if (Settings::Drawing::Radar::name) {
+			draw_list->AddText(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), color, entity->GetObjectName());
+		}
+
+		if (entity->IsGameObject() && Settings::Drawing::Radar::GameObject) {
+			shape = EntityShape_t::SHAPE_SQUARE;
+		}
+
+		switch (shape) {
+		case EntityShape_t::SHAPE_CIRCLE:
+			draw_list->AddCircleFilled(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), scale, color);
+			break;
+		case EntityShape_t::SHAPE_SQUARE:
+			draw_list->AddRectFilled(ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y - scale),
+				ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y + scale),
+				color, 0.0f, 0);
+			break;
+		case EntityShape_t::SHAPE_TRIANGLE:
+			draw_list->AddTriangleFilled(ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y + scale),
+				ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y + scale),
+				ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y - scale),
+				color);
+			break;
+		case EntityShape_t::SHAPE_TRIANGLE_UPSIDEDOWN:
+			draw_list->AddTriangleFilled(ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y - scale),
+				ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y - scale),
+				ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y + scale),
+				color);
+			break;
+		}
+
+	}
 
 	void Radar::RenderWindow()
 	{
-
-		if (!Settings::Drawing::Enabled)
-			return;
-
 		if (!Settings::Drawing::Radar::Enabled)
 			return;
-
-		//if (LuaScript::Objects.empty())
-		//	return;
-
 		__try
 		{
-
 			ImGui::SetNextWindowSize(ImVec2(256, 256), ImGuiSetCond_FirstUseEver);
 			ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(FLT_MAX, FLT_MAX), SquareConstraint);
 
@@ -96,170 +153,92 @@ namespace Radar {
 				draw_list->AddLine(ImVec2(winpos.x + winsize.x * 0.5f, winpos.y + winsize.y * 0.5f), ImVec2(winpos.x + winsize.x, winpos.y), ImColor(90, 90, 90, 255), 1.f);
 
 
-				WObject* localplayer = (WObject*)LuaScript::ActivePlayer;
+				WObject* localplayer = (WObject*)Globals::LocalPlayer;
 				if (!localplayer)
 				{
 					ImGui::End();
 					return;
 				}
 
-				float Player_rotation = RadianToDegree(localplayer->GetFacing());
-
 				// draw localplayer
 				draw_list->AddCircleFilled(ImVec2(winpos.x + winsize.x * 0.5f, winpos.y + winsize.y * 0.5f), Settings::Drawing::Radar::iconsScale, ImColor(255, 255, 255, 255));
 
 				float scale = Settings::Drawing::Radar::iconsScale;
 
-				for (auto& entity : LuaScript::Objects)
+				for (auto& [guid, entity] : Globals::Objects)
 				{
+					if (!entity)
+						continue;
+
 					if (!entity->isValid())
 						continue;
 
-					int TypeID = (int)entity->GetType();
-					if (!TypeID)
-						continue;
+					bool IsCorrectObj = false;
+					if (entity->IsGameObject() || entity->IsUnit() || entity->IsPlayer() || entity->IsLocalPlayer()) { IsCorrectObj = true; }
+					else { IsCorrectObj = false; }
 
-					if (!TypeID == (int)TypeId::CGUnit || !TypeID == (int)TypeId::CGPlayer || !TypeID == (int)TypeId::CGActivePlayer || !TypeID == (int)TypeId::CGGameObject)
+					if (!IsCorrectObj)
 						continue;
 
 					if (!Utils::ValidCoord(entity))
 						continue;
 
-					Vector2D screenpos = WorldToRadar(entity->GetUnitPosition(), localplayer->GetUnitPosition(), Player_rotation, winsize.x, Settings::Drawing::Radar::zoom);
 					ImColor color;
-					int shape = -1;
-
-					if (TypeID == (int)TypeId::CGPlayer)
+				
+					if (entity->IsPlayer() && Settings::Drawing::Radar::Player)
 					{
-						if (!Settings::Drawing::Radar::Player)
-							continue;
 
 						WObject* player = (WObject*)entity;
 
-						if ((!player->sUnitField->Health > 0) && !Settings::Drawing::Radar::DrawDeadEntity)
+						if ((player->IsDead()) && !Settings::Drawing::Radar::DrawDeadEntity)
+							continue;
+
+						if (Utils::IsUnitEnemy(player) && !Settings::Drawing::Radar::HostilePlayers)
 							continue;
 
 						color = Settings::Drawing::Radar::PlayerColor.Color(player);
 
-						C3Vector localPos = localplayer->GetUnitPosition();
-						C3Vector playerPos = player->GetUnitPosition();
-						C3Vector forward = player->direction;
-
-						if (playerPos.z + 64.0f < localPos.z)
-							shape = EntityShape_t::SHAPE_TRIANGLE_UPSIDEDOWN;
-						else if (playerPos.z - 64.0f > localPos.z)
-							shape = EntityShape_t::SHAPE_TRIANGLE;
-						else
-							shape = EntityShape_t::SHAPE_CIRCLE;
-
-						
-						C3Vector dirArrowVec = playerPos + (forward * 2 * Settings::Drawing::Radar::zoom * scale);
-						Vector2D dirArrowPos = WorldToRadar(dirArrowVec, localplayer->GetUnitPosition(), Player_rotation, winsize.x, Settings::Drawing::Radar::zoom);
-						Vector2D line = dirArrowPos - screenpos;
-
-						float arrowWidth = scale;
-						float arrowTheta = 45.f;
-						float length = sqrtf(powf(line.x, 2.f) + powf(line.y, 2.f));
-
-						Vector2D arrowBase = dirArrowPos - (arrowWidth / (2 * (tanf(arrowTheta) / 2) * length)) * line;
-						Vector2D normal = Vector2D(-line.y, line.x);
-						Vector2D left = arrowBase + arrowWidth / (2 * length) * normal;
-						Vector2D right = arrowBase + -arrowWidth / (2 * length) * normal;
-
-						draw_list->AddTriangleFilled(ImVec2(winpos.x + left.x, winpos.y + left.y),
-							ImVec2(winpos.x + right.x, winpos.y + right.y),
-							ImVec2(winpos.x + dirArrowPos.x, winpos.y + dirArrowPos.y),
-							ImColor(230, 230, 230));
-
-						if (Settings::Drawing::Radar::name)
-						{
-							draw_list->AddText(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), color, entity->GetObjectName());
-						}
+						DrawObj(localplayer, player, color, draw_list, winpos, winsize);
 					}
 
-
-					else if (TypeID == (int)TypeId::CGUnit)
-					{
-						if (!Settings::Drawing::Radar::Unit)
-							continue;
-
-						if (!TypeID == (int)TypeId::CGUnit)
-							continue;
-
+					else if (entity->IsUnit() && Settings::Drawing::Radar::Unit) {
+	
 						WObject* Unit = (WObject*)entity;
 
 						if (Unit == localplayer)
 							continue;
 
-						if (!Unit->sUnitField->Health > 0 && !Settings::Drawing::Radar::DrawDeadEntity)
+						if (Unit->IsDead() && !Settings::Drawing::Radar::DrawDeadEntity)
 							continue;
 
-						if (Utils::IsFriendlyOrEnemy(Unit) == Utils::IsFriendlyOrEnemy(localplayer) && !Settings::Drawing::Ally)
+						if (Utils::IsUnitEnemy(Unit) && !Settings::Drawing::Radar::HostileUnits)
 							continue;
-
-
-						if (Utils::IsFriendlyOrEnemy(Unit) != Utils::IsFriendlyOrEnemy(localplayer) && !Settings::Drawing::Enemy)
-							continue;
-
 
 						color = Settings::Drawing::Radar::UnitColor.Color(Unit);
 
-						if (Settings::Drawing::Radar::name)
-						{
-							draw_list->AddText(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), color, Unit->GetObjectName());
-						}
+						DrawObj(localplayer, Unit, color, draw_list, winpos, winsize);
 					}
-					else if (TypeID == (int)TypeId::CGGameObject)
-					{
-						if (!Settings::Drawing::Radar::GameObject)
-							continue;
-
-						if (!TypeID == (int)TypeId::CGGameObject)
-							continue;
+					else if (entity->IsGameObject() && Settings::Drawing::Radar::GameObject) {
 
 						WObject* GameObj = (WObject*)entity;
 
-						color = Settings::Drawing::Radar::GameObjectColor.Color();
-						shape = EntityShape_t::SHAPE_SQUARE;
-						if (Settings::Drawing::Radar::name)
-						{
-							draw_list->AddText(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), color, GameObj->GetObjectName());
+						if (!GameMethods::CGGameObject_C_IsLocked(entity)) {
+							color = Settings::Drawing::Radar::UnlockedGameObjectColor.Color();
 						}
-					}
-					switch (shape)
-					{
-					case EntityShape_t::SHAPE_CIRCLE:
-						draw_list->AddCircleFilled(ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y), scale, color);
-						break;
-					case EntityShape_t::SHAPE_SQUARE:
-						draw_list->AddRectFilled(ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y - scale),
-							ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y + scale),
-							color, 0.0f, 0);
-						break;
-					case EntityShape_t::SHAPE_TRIANGLE:
-						draw_list->AddTriangleFilled(ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y + scale),
-							ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y + scale),
-							ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y - scale),
-							color);
-						break;
-					case EntityShape_t::SHAPE_TRIANGLE_UPSIDEDOWN:
-						draw_list->AddTriangleFilled(ImVec2(winpos.x + screenpos.x - scale, winpos.y + screenpos.y - scale),
-							ImVec2(winpos.x + screenpos.x + scale, winpos.y + screenpos.y - scale),
-							ImVec2(winpos.x + screenpos.x, winpos.y + screenpos.y + scale),
-							color);
-						break;
+						else {
+							color = Settings::Drawing::Radar::GameObjectColor.Color();
+						}
+					
+						DrawObj(localplayer, GameObj, color, draw_list, winpos, winsize);
 					}
 				}
-
 				ImGui::End();
 			}
 		}
 		__except (Utils::filterException(GetExceptionCode(), GetExceptionInformation())) {
 			printf("[!] Radar Exception Caught!\n");
-			Settings::bot::Refresh = true;
-			//Settings::bot::fishing::IsFishing = false;
+			WoWObjectManager::CycleObjects(true);
 			ImGui::End();
 		}
 	}
-	
 }
